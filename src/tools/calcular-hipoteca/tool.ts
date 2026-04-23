@@ -3,15 +3,29 @@ import { z } from 'zod';
 import { calcularHipoteca } from './calculator';
 
 export function registerCalcularHipoteca(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     'calcular_hipoteca',
-    'Calcula la cuota mensual de una hipoteca, el total de intereses, TAE y el ratio deuda/ingresos.',
     {
-      precio_vivienda: z.number().describe('Precio total de la vivienda en euros'),
-      entrada: z.number().describe('Importe de la entrada en euros (ej: 50000 para 50.000 €)'),
-      plazo_anios: z.number().default(30).describe('Plazo de la hipoteca en años (ej: 25, 30)'),
-      tipo_interes_anual: z.number().default(3.5).describe('Tipo de interés anual en % (ej: 3.5)'),
-      ingresos_mensuales_netos: z.number().optional().describe('Ingresos netos mensuales del solicitante en euros'),
+      description:
+        'Calcula la cuota mensual de una hipoteca, el total de intereses, TAE y el ratio deuda/ingresos.',
+      inputSchema: {
+        precio_vivienda: z.number().describe('Precio total de la vivienda en euros'),
+        entrada: z
+          .number()
+          .describe('Importe de la entrada en euros (ej: 50000 para 50.000 €)'),
+        plazo_anios: z
+          .number()
+          .default(30)
+          .describe('Plazo de la hipoteca en años (ej: 25, 30)'),
+        tipo_interes_anual: z
+          .number()
+          .default(3.5)
+          .describe('Tipo de interés anual en % (ej: 3.5)'),
+        ingresos_mensuales_netos: z
+          .number()
+          .optional()
+          .describe('Ingresos netos mensuales del solicitante en euros'),
+      },
     },
     async (datos) => {
       const r = calcularHipoteca(datos);

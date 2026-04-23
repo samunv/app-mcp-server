@@ -3,14 +3,16 @@ import { z } from 'zod';
 import { buscarPropiedades } from './service';
 
 export function registerBuscarPropiedades(server: McpServer): void {
-  server.tool(
+  server.registerTool(
     'buscar_propiedades',
-    'Busca propiedades inmobiliarias en venta. Usa datos de Idealista o mock realista si no hay API key.',
     {
-      ciudad: z.string().describe('Ciudad donde buscar (ej: Madrid, Barcelona)'),
-      precio_max: z.number().optional().describe('Precio máximo en euros'),
-      habitaciones: z.number().optional().describe('Número exacto de habitaciones'),
-      metros_min: z.number().optional().describe('Superficie mínima en m²'),
+      description: 'Busca propiedades inmobiliarias en venta. Usa datos de Idealista o mock realista si no hay API key.',
+      inputSchema: {
+        ciudad: z.string().describe('Ciudad donde buscar (ej: Madrid, Barcelona)'),
+        precio_max: z.number().optional().describe('Precio máximo en euros'),
+        habitaciones: z.number().optional().describe('Número exacto de habitaciones'),
+        metros_min: z.number().optional().describe('Superficie mínima en m²'),
+      },
     },
     async ({ ciudad, precio_max, habitaciones, metros_min }) => {
       const propiedades = await buscarPropiedades({ ciudad, precio_max, habitaciones, metros_min });
@@ -18,10 +20,7 @@ export function registerBuscarPropiedades(server: McpServer): void {
       if (propiedades.length === 0) {
         return {
           content: [
-            {
-              type: 'text',
-              text: `No se encontraron propiedades en ${ciudad} con los filtros indicados.`,
-            },
+            { type: 'text', text: `No se encontraron propiedades en ${ciudad} con los filtros indicados.` },
           ],
         };
       }
