@@ -194,5 +194,6 @@ export async function buscarPropiedades(params: BuscarParams): Promise<Propiedad
   if (process.env.IDEALISTA_API_KEY && process.env.IDEALISTA_SECRET) {
     return buscarEnIdealista(params);
   }
+  // Fallback para buscar en el mock
   return buscarEnMock(params);
 }
