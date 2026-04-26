@@ -1,61 +1,82 @@
 import Groq from "groq-sdk";
 import { NextRequest, NextResponse } from "next/server";
 import { MODELO, SYSTEM_PROMPT } from "../variables";
-import { getTools, callTool } from "@/lib/mcp_client";
 import { ChatCompletionMessageParam } from "groq-sdk/resources/chat.mjs";
+import { createMcpClient } from "@/lib/mcp_client";
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
 export async function POST(req: NextRequest) {
-  const { message } = await req.json();
+  try {
+    const { message } = await req.json();
 
-  // 1. Obtienes tools del MCP y las conviertes a formato Groq
-  const mcpTools = await getTools();
-  const groqTools = mcpTools.map(tool => ({
-    type: "function" as const,
-    function: {
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.inputSchema,
-    },
-  }));
+    // Un solo cliente para toda la request
+    const mcpClient = await createMcpClient();
 
-  const messages: ChatCompletionMessageParam[] = [
-    { role: "system", content: SYSTEM_PROMPT },
-    { role: "user", content: message },
-  ];
+    const { tools } = await mcpClient.listTools();
 
-  //  Bucle hasta que Groq responda sin tool calls
-  while (true) {
-    const response = await groq.chat.completions.create({
-      model: MODELO,
-      messages,
-      tools: groqTools,
-    });
+    const groqTools = tools.map(tool => ({
+      type: "function" as const,
+      function: {
+        name: tool.name,
+        description: tool.description,
+        parameters: {
+          type: "object",
+          properties: tool.inputSchema.properties,
+          required: tool.inputSchema.required ?? [],
+        },
+      },
+    }));
 
-    const choice = response.choices[0];
+    const messages: ChatCompletionMessageParam[] = [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content: message },
+    ];
 
-    if (choice.finish_reason === "stop") {
-      return NextResponse.json({ reply: choice.message.content });
-    }
+    while (true) {
+      const response = await groq.chat.completions.create({
+        model: MODELO,
+        messages,
+        tools: groqTools,
+      });
 
-    if (choice.finish_reason === "tool_calls") {
-      messages.push(choice.message);
+      const choice = response.choices[0];
 
-      for (const toolCall of choice.message.tool_calls!) {
-        const result = await callTool(
-          toolCall.function.name,
-          JSON.parse(toolCall.function.arguments)
-        );
+      if (choice.finish_reason === "stop") {
+        await mcpClient.close();
+        return NextResponse.json({ reply: choice.message.content });
+      }
 
-        messages.push({
-          role: "tool",
-          tool_call_id: toolCall.id,
-          content: JSON.stringify(result),
-        });
+      if (choice.finish_reason === "tool_calls") {
+        messages.push(choice.message);
+
+        for (const toolCall of choice.message.tool_calls!) {
+          console.log("Tool llamada:", toolCall.function.name);
+          console.log("Argumentos:", toolCall.function.arguments);
+
+          try {
+            const result = await mcpClient.callTool({
+              name: toolCall.function.name,
+              arguments: JSON.parse(toolCall.function.arguments),
+            });
+            console.log("Resultado:", JSON.stringify(result));
+
+            messages.push({
+              role: "tool",
+              tool_call_id: toolCall.id,
+              content: JSON.stringify(result),
+            });
+          } catch (toolError) {
+            console.error("Error en tool:", toolError);
+          }
+        }
       }
     }
+
+  } catch (error) {
+    console.error("Error en /api/chat:", error);
+    return NextResponse.json({ error: String(error) }, { status: 500 });
   }
 }
